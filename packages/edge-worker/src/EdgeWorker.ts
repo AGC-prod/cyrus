@@ -4600,6 +4600,18 @@ ${taskSection}`;
 				`Label-based runner selection for new session: ${runnerType} (session ${sessionId})`,
 			);
 
+			// If the user's comment explicitly requests a merge, authorize it so
+			// the pre-bash-guard.sh merge block can be bypassed for this session.
+			if (commentBody && /\bmerge\b/i.test(commentBody)) {
+				runnerConfig.additionalEnv = {
+					...runnerConfig.additionalEnv,
+					CYRUS_MERGE_AUTHORIZED: "1",
+				};
+				log.debug(
+					`Merge authorization detected in comment — setting CYRUS_MERGE_AUTHORIZED=1`,
+				);
+			}
+
 			const runner = this.createRunnerForType(runnerType, runnerConfig);
 
 			// Store runner by comment ID
