@@ -4444,6 +4444,12 @@ ${taskSection}`;
 				systemPromptVersion = systemPromptResult?.version;
 				promptType = systemPromptResult?.type;
 
+				// Pin the resolved prompt type on the session so that label changes
+				// between start and resume don't silently swap the rulebook (CRATE-170).
+				if (promptType) {
+					session.pinnedPromptType = promptType;
+				}
+
 				// Post thought about system prompt selection
 				if (assembly.systemPrompt) {
 					await this.postSystemPromptSelectionThought(
@@ -7133,14 +7139,37 @@ ${input.userComment}
 				!hasCodexSession &&
 				!hasCursorSession);
 
-		// Fetch system prompt based on labels
-
+		// Fetch system prompt based on current labels
 		const systemPromptResult = await this.determineSystemPromptFromLabels(
 			labels,
 			repository,
 		);
 		const systemPrompt = systemPromptResult?.prompt;
-		const promptType = systemPromptResult?.type;
+		const currentPromptType = systemPromptResult?.type;
+
+		// Use the prompt type that was pinned at session start (CRATE-170).
+		// Re-resolving from current labels is the root cause of rulebook drift:
+		// if someone adds/removes a label between start and resume, the resumed
+		// session would silently get a different system prompt and tool set.
+		// Pin wins by default; log loudly if there's a mismatch so it's visible.
+		// Sessions started before pinning was introduced have no pin — those fall
+		// back to the current-labels path unchanged.
+		const promptType = (() => {
+			if (session.pinnedPromptType) {
+				if (
+					currentPromptType &&
+					currentPromptType !== session.pinnedPromptType
+				) {
+					log.warn(
+						`[RULEBOOK PIN] session ${session.id}: pinned="${session.pinnedPromptType}" ` +
+							`but current labels resolve to "${currentPromptType}". ` +
+							`Using pinned type. To re-route deliberately, clear pinnedPromptType on the session.`,
+					);
+				}
+				return session.pinnedPromptType;
+			}
+			return currentPromptType;
+		})();
 
 		// Build allowed and disallowed tools lists
 		const allowedTools = this.buildAllowedTools(repository, promptType);
