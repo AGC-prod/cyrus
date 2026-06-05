@@ -95,6 +95,18 @@ export interface CyrusAgentSession {
 	codexSessionId?: string; // Codex-specific session ID (assigned once it initializes)
 	cursorSessionId?: string; // Cursor-specific session ID (assigned once it initializes)
 	agentRunner?: IAgentRunner;
+	/**
+	 * Prompt type resolved at session start, persisted so that label changes
+	 * between start and resume do not silently swap the rulebook (CRATE-170).
+	 * Undefined for sessions started before this field was added (pre-pin era),
+	 * in which case the resume path falls back to resolving from current labels.
+	 */
+	pinnedPromptType?:
+		| "debugger"
+		| "builder"
+		| "scoper"
+		| "orchestrator"
+		| "graphite-orchestrator";
 	metadata?: {
 		model?: string;
 		tools?: string[];
