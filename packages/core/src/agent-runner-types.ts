@@ -488,6 +488,8 @@ export interface AgentRunnerConfig {
 	onError?: (error: Error) => void | Promise<void>;
 	/** Callback when session completes */
 	onComplete?: (messages: AgentMessage[]) => void | Promise<void>;
+	/** Extra environment variables to inject into the agent subprocess */
+	additionalEnv?: Record<string, string>;
 }
 
 /**
