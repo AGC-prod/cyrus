@@ -7474,6 +7474,21 @@ ${input.userComment}
 				this.buildSkillSessionContext(repository, fullIssue, session),
 			);
 
+		// If the user's prompt explicitly requests a merge, authorize it so
+		// the pre-bash-guard.sh merge block can be bypassed for this session.
+		// Mirrors the new-session path (CRATE-164) — resumed sessions never
+		// got this, so a "merge" reply on an existing session was always
+		// blocked by the hook regardless of what the agent tried.
+		if (promptBody && /\bmerge\b/i.test(promptBody)) {
+			runnerConfig.additionalEnv = {
+				...runnerConfig.additionalEnv,
+				CYRUS_MERGE_AUTHORIZED: "1",
+			};
+			log.debug(
+				`Merge authorization detected in prompt — setting CYRUS_MERGE_AUTHORIZED=1 (resume path)`,
+			);
+		}
+
 		// Create the appropriate runner based on session state
 		const runner = this.createRunnerForType(runnerType, runnerConfig);
 
