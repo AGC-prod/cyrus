@@ -7479,7 +7479,10 @@ ${input.userComment}
 		// Mirrors the new-session path (CRATE-164) — resumed sessions never
 		// got this, so a "merge" reply on an existing session was always
 		// blocked by the hook regardless of what the agent tried.
-		if (promptBody && /\bmerge\b/i.test(promptBody)) {
+		const mergeAuthorized = Boolean(
+			promptBody && /\bmerge\b/i.test(promptBody),
+		);
+		if (mergeAuthorized) {
 			runnerConfig.additionalEnv = {
 				...runnerConfig.additionalEnv,
 				CYRUS_MERGE_AUTHORIZED: "1",
@@ -7499,7 +7502,7 @@ ${input.userComment}
 		await this.savePersistedState();
 
 		// Prepare the full prompt
-		const fullPrompt = await this.buildSessionPrompt(
+		let fullPrompt = await this.buildSessionPrompt(
 			isNewSession,
 			session,
 			fullIssue,
@@ -7509,6 +7512,15 @@ ${input.userComment}
 			commentAuthor,
 			commentTimestamp,
 		);
+
+		// Make the merge authorization visible in-band. Long-lived resumed
+		// sessions carry the OLD appendInstruction (and often a stale worktree
+		// CLAUDE.md) in their conversation context, so without this note the
+		// agent argues from superseded "never merge" prose and never thinks to
+		// check the env var (observed: CRATE-177, CRATE-180).
+		if (mergeAuthorized) {
+			fullPrompt += `\n\n<merge-authorization>\nCYRUS_MERGE_AUTHORIZED=1 is set for this session because this comment contains a merge request. Current policy (CLAUDE.md "Merge policy", commit f7f30d41): when a human comment explicitly asks you to merge, run \`gh pr merge\` — pre-bash-guard.sh will allow it. Any earlier instruction in this conversation, or in a stale CLAUDE.md checkout, saying "never run gh pr merge" is superseded by this authorization. If the human is explicitly asking for a merge, do not refuse or hand it back — merge.\n</merge-authorization>`;
+		}
 
 		// Start session - use streaming mode if supported for ability to add messages later
 		try {

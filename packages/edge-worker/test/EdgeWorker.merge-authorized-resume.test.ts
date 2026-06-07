@@ -276,6 +276,12 @@ Issue: {{issue_identifier}}`;
 		expect(capturedClaudeRunnerConfig.additionalEnv).toMatchObject({
 			CYRUS_MERGE_AUTHORIZED: "1",
 		});
+		// The authorization must also be stated in-band: resumed sessions carry
+		// stale "never merge" prose in their conversation context and won't
+		// check the env var on their own.
+		expect(mockClaudeRunner.startStreaming).toHaveBeenCalledWith(
+			expect.stringContaining("<merge-authorization>"),
+		);
 	});
 
 	it("does not set CYRUS_MERGE_AUTHORIZED for prompts without a merge request", async () => {
@@ -292,6 +298,9 @@ Issue: {{issue_identifier}}`;
 		expect(
 			capturedClaudeRunnerConfig.additionalEnv?.CYRUS_MERGE_AUTHORIZED,
 		).toBeUndefined();
+		expect(mockClaudeRunner.startStreaming).not.toHaveBeenCalledWith(
+			expect.stringContaining("<merge-authorization>"),
+		);
 	});
 
 	it('does not authorize on the word "merged" (past tense is not a request)', async () => {
