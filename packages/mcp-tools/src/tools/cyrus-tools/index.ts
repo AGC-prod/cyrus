@@ -606,6 +606,67 @@ export function createCyrusToolsServer(
 	);
 
 	server.registerTool(
+		"linear_post_comment",
+		{
+			description:
+				"Post a comment on a Linear issue. Goes through Cyrus's own Linear client, which auto-refreshes expired OAuth tokens — use this instead of the hosted Linear MCP server's save_comment, which can fail with 'requires re-authorization' when the token rotates mid-session. Omit parentId to post a top-level comment; supply parentId to reply to an existing comment.",
+			inputSchema: {
+				issueId: z
+					.string()
+					.describe("Issue identifier (e.g. 'PROJ-123') or UUID"),
+				body: z.string().describe("The comment body in Markdown"),
+				parentId: z
+					.string()
+					.optional()
+					.describe(
+						"ID of the parent comment to reply to. Omit for a top-level comment.",
+					),
+			},
+		},
+		async ({ issueId, body, parentId }) => {
+			const fail = (payload: Record<string, unknown>) => ({
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({ success: false, ...payload }),
+					},
+				],
+			});
+			try {
+				const issue = await linearClient.issue(issueId);
+				if (!issue) {
+					return fail({ error: `Issue ${issueId} not found` });
+				}
+
+				const result = await linearClient.createComment({
+					issueId: issue.id,
+					body,
+					...(parentId && { parentId }),
+				});
+
+				const comment = await result.comment;
+
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								success: true,
+								commentId: comment?.id,
+								message: `Posted ${parentId ? "reply" : "top-level"} comment on ${issue.identifier}`,
+							}),
+						},
+					],
+				};
+			} catch (error) {
+				return fail({
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		},
+	);
+
+	server.registerTool(
 		"linear_update_issue_status",
 		{
 			description:
