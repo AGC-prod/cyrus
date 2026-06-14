@@ -5279,8 +5279,9 @@ ${taskSection}`;
 		if (containsLinearReauthorizationError(message)) {
 			this.logger.error(
 				`🔑 Session ${sessionId} hit a stale Linear token (MCP "linear" requires re-authorization). ` +
-					"Status writes through the hosted Linear MCP will fail for the rest of this turn — " +
-					"the agent should fall back to mcp__cyrus-tools__linear_update_issue_status. " +
+					"Status and comment writes through the hosted Linear MCP will fail for the rest of this turn — " +
+					"the agent should fall back to the cyrus-tools native equivalents " +
+					"(mcp__cyrus-tools__linear_update_issue_status, mcp__cyrus-tools__linear_post_comment). " +
 					"Forcing a token refresh so subsequent turns get a fresh snapshot.",
 			);
 			const wsId = this.repositories.get(repositoryId)?.linearWorkspaceId;
