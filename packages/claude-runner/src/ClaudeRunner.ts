@@ -829,6 +829,36 @@ export class ClaudeRunner extends EventEmitter implements IAgentRunner {
 							this.writeReadableLogEntry(message);
 						}
 
+						// Surface context auto-compaction as a first-class, greppable event
+						// so we can confirm the 200k/80% knobs are firing on heavy sessions
+						// and see how much context each compaction sheds.
+						if (
+							message.type === "system" &&
+							(message as { subtype?: string }).subtype === "compact_boundary"
+						) {
+							const meta = (
+								message as {
+									compact_metadata?: {
+										trigger?: string;
+										pre_tokens?: number;
+										post_tokens?: number;
+										duration_ms?: number;
+									};
+								}
+							).compact_metadata;
+							this.logger.event("context_compacted", {
+								claudeSessionId: this.sessionInfo?.sessionId,
+								trigger: meta?.trigger,
+								preTokens: meta?.pre_tokens,
+								postTokens: meta?.post_tokens,
+								durationMs: meta?.duration_ms,
+							});
+							this.logger.info(
+								`Context compacted (${meta?.trigger ?? "?"}): ` +
+									`${meta?.pre_tokens ?? "?"} -> ${meta?.post_tokens ?? "?"} tokens`,
+							);
+						}
+
 						// Emit all messages (including result) immediately in-loop.
 						// When keepSessionWarm is true, the streamingPrompt stays open for
 						// follow-up messages so the SDK session can be reused. Otherwise we

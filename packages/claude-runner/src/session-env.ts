@@ -36,6 +36,38 @@ export const CYRUS_SESSION_ENV = {
 } as const;
 
 /**
+ * Context auto-compaction defaults.
+ *
+ * Long iterative sessions — especially resumed ones, which replay the entire
+ * prior transcript every turn — accumulate stale context (old file reads, tool
+ * output, finished sub-tasks) and degrade in both quality and latency well
+ * before the model's hard context limit. On the default 1M window the CLI's
+ * ~95% auto-compaction trigger fires near ~950k, which real Cyrus sessions
+ * never reach (observed peak ~46% of 1M / ~464k), so the transcript grows
+ * unbounded and the model "bogs down."
+ *
+ * We pin the effective window to 200k and compact at 80% (~160k) so each
+ * session periodically sheds stale context down to a summary plus recent turns.
+ * The CLI persists the compaction into the transcript and splices the preserved
+ * segment back on resume, so the win carries across Cyrus's resume-per-comment
+ * pattern — not just within a single turn.
+ *
+ * Applied as DEFAULTS (see buildBaseSessionEnv): an operator can override either
+ * knob via the launchd plist / .env (process.env) without a rebuild — e.g. set
+ * CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=75 for a wider safety margin on long
+ * multi-file issues, or CLAUDE_CODE_DISABLE_1M_CONTEXT=0 to restore the 1M
+ * window for a specific run.
+ *
+ * Both knobs are read by the bundled Claude Code CLI subprocess.
+ */
+export const CONTEXT_COMPACTION_ENV_DEFAULTS = {
+	// Pin the effective context window to 200k (disable the 1M window).
+	CLAUDE_CODE_DISABLE_1M_CONTEXT: "1",
+	// Trigger auto-compaction at 80% of the window (~160k tokens).
+	CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "80",
+} as const;
+
+/**
  * Build the base `env` object for a Claude SDK session.
  *
  * Overlays the full parent `process.env` so HOME (and other inherited vars) are
@@ -62,6 +94,15 @@ export function buildBaseSessionEnv(
 	for (const key of AUTH_ENV_KEYS) {
 		if (process.env[key]) {
 			env[key] = process.env[key];
+		}
+	}
+
+	// Apply context-compaction knobs as defaults: only set them when the
+	// operator hasn't already provided a value (env is seeded from process.env
+	// above), so the launchd plist / .env can override without a rebuild.
+	for (const [key, value] of Object.entries(CONTEXT_COMPACTION_ENV_DEFAULTS)) {
+		if (env[key] === undefined || env[key] === "") {
+			env[key] = value;
 		}
 	}
 

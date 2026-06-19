@@ -254,4 +254,47 @@ describe("Environment variable isolation", () => {
 		// additionalEnv wins over both process.env and repositoryEnv
 		expect(env.PATH).toBe("/from-additional-env");
 	});
+
+	it("should apply context-compaction defaults (200k window, compact at 80%)", async () => {
+		// Ensure no operator override is present for this test.
+		const hadDisable = "CLAUDE_CODE_DISABLE_1M_CONTEXT" in process.env;
+		const hadPct = "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE" in process.env;
+		delete process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT;
+		delete process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+
+		try {
+			mockSuccessfulQuery();
+			const runner = new ClaudeRunner(makeConfig("/repo-a"));
+			await runner.start("test");
+
+			const env = getQueryEnv();
+			expect(env.CLAUDE_CODE_DISABLE_1M_CONTEXT).toBe("1");
+			expect(env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe("80");
+		} finally {
+			if (!hadDisable) delete process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT;
+			if (!hadPct) delete process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+		}
+	});
+
+	it("should let an operator override the compaction threshold via process.env", async () => {
+		const hadPct = "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE" in process.env;
+		const origPct = process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+		process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = "70";
+
+		try {
+			mockSuccessfulQuery();
+			const runner = new ClaudeRunner(makeConfig("/repo-a"));
+			await runner.start("test");
+
+			const env = getQueryEnv();
+			// Operator-provided value must win over the built-in default.
+			expect(env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe("70");
+		} finally {
+			if (hadPct) {
+				process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = origPct;
+			} else {
+				delete process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+			}
+		}
+	});
 });
